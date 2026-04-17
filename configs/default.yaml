@@ -6,7 +6,7 @@ data:
   fold: 1
   seq_len: 501
   min_basemean: 10
-  max_sites_per_gene: 32
+  max_sites_per_gene: 128
 
 model:
   # DNABERT-2 位点编码器
@@ -38,7 +38,7 @@ training:
   gradient_clip: 1.0
   patience: 15                 # early stopping
   instance_budget: 128     # 每个 batch 的总位点数上限
-  max_batch_size: 32           # 每个 batch 的基因数上限
+  max_batch_size: 64           # 每个 batch 的基因数上限
   seed: 42
 
 experiment:

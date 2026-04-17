@@ -39,7 +39,7 @@ class DNABERT2SiteEncoder(nn.Module):
         (N, hidden_dim) float tensor
         """
         N = input_ids.size(0)
-        chunk_size = 32
+        chunk_size = 16
         if N <= chunk_size:
             return self._encode(input_ids, attention_mask)
         all_repr = []
@@ -51,7 +51,7 @@ class DNABERT2SiteEncoder(nn.Module):
             all_repr.append(repr)
         return torch.cat(all_repr, dim=0)  # (N, 768)
     
-    
+
     def _encode(self, input_ids, attention_mask):
         """编码一个 chunk."""
         outputs = self.bert(
