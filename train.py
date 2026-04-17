@@ -166,6 +166,11 @@ def train_one_fold(fold: int, config: dict):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Device: %s", device)
     exp_dir = setup_experiment(config, fold)    
+    file_handler = logging.FileHandler(exp_dir / "training.log")
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
+    ))
+    logging.getLogger().addHandler(file_handler)
 
     # --- 1. 加载数据表 ---
     logger.info("Loading data tables...")

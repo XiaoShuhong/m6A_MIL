@@ -14,6 +14,7 @@ model:
     type: dnabert2
     model_name: zhihan1996/DNABERT-2-117M
     pooling: mean    
+    freeze_layers: 10    
 
   scalar_dim: 13
   # 融合后的隐藏维度
@@ -31,8 +32,8 @@ model:
 
 training:
   epochs: 50
-  lr_encoder: 2.0e-5           # DNABERT-2 微调学习率
-  lr_head: 5.0e-4              # MIL + fusion + head 学习率
+  lr_encoder: 5.0e-4           # DNABERT-2 微调学习率
+  lr_head: 5.0e-6              # MIL + fusion + head 学习率
   weight_decay: 1.0e-4         # L2 正则 (AdamW)
   warmup_epochs: 5
   gradient_clip: 1.0

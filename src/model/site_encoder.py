@@ -1,13 +1,16 @@
+import logging
+
 import torch
 import torch.nn as nn
 from transformers import AutoConfig,AutoModel
- 
+logger = logging.getLogger(__name__)
 
 class DNABERT2SiteEncoder(nn.Module):
     def __init__(
         self,
         model_name: str = "zhihan1996/DNABERT-2-117M",
         pooling: str = "mean",
+        freeze_layers: int = 8,  
     ):
         super().__init__()
         config = AutoConfig.from_pretrained(
@@ -22,6 +25,20 @@ class DNABERT2SiteEncoder(nn.Module):
         )
         self.pooling = pooling
         self.hidden_dim = self.bert.config.hidden_size  # 768
+        if freeze_layers > 0:
+            for param in self.bert.embeddings.parameters():
+                param.requires_grad = False
+            for i, layer in enumerate(self.bert.encoder.layer):
+                if i < freeze_layers:
+                    for param in layer.parameters():
+                        param.requires_grad = False
+
+            total = sum(p.numel() for p in self.bert.parameters())
+            trainable = sum(p.numel() for p in self.bert.parameters() if p.requires_grad)
+            logger.info(
+                "  DNABERT-2: %.1fM total, %.1fM frozen, %.1fM trainable (freeze_layers=%d)",
+                total/1e6, (total-trainable)/1e6, trainable/1e6, freeze_layers,
+            )
     
     def forward(
         self,

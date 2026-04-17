@@ -40,6 +40,7 @@ class M6AMIL(nn.Module):
         self.site_encoder = DNABERT2SiteEncoder(
             model_name=enc_cfg.get("model_name", "zhihan1996/DNABERT-2-117M"),
             pooling=enc_cfg.get("pooling", "mean"),
+            freeze_layers=enc_cfg.get("freeze_layers", 8),
         )
         seq_dim = self.site_encoder.output_dim  # 768
  
@@ -96,9 +97,9 @@ class M6AMIL(nn.Module):
 
         real_ids = flat_ids[real_mask]                          # (N_real, L)
         real_token_mask = flat_token_mask[real_mask]            # (N_real, L)
-        print(f"DEBUG: B={B}, S={S}, L={L}, B*S={B*S}, real={real_ids.shape[0]}, "
-            f"real_ids.shape={real_ids.shape}, dtype={real_ids.dtype}, "
-            f"max_id={real_ids.max().item()}")
+        # print(f"DEBUG: B={B}, S={S}, L={L}, B*S={B*S}, real={real_ids.shape[0]}, "
+        #     f"real_ids.shape={real_ids.shape}, dtype={real_ids.dtype}, "
+        #     f"max_id={real_ids.max().item()}")
 
         real_repr = self.site_encoder(real_ids, real_token_mask) 
 
