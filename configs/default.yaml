@@ -1,0 +1,46 @@
+data:
+  gene_table: data/processed/gene_table.parquet
+  site_table: data/processed/site_table.parquet
+  seq_dir: data/processed/sequences
+  split_dir: data/processed/splits
+  fold: 1
+  seq_len: 501
+  min_basemean: 10
+  max_sites_per_gene: 32
+
+model:
+  # DNABERT-2 位点编码器
+  site_encoder:
+    type: dnabert2
+    model_name: zhihan1996/DNABERT-2-117M
+    pooling: mean    
+
+  scalar_dim: 13
+  # 融合后的隐藏维度
+  hidden_dim: 256
+
+  aggregator:
+    n_heads: 4
+    n_layers: 2
+    dropout: 0.1
+
+  head:
+    hidden_dim: 128
+    n_tasks: 1
+    dropout: 0.2
+
+training:
+  epochs: 50
+  lr_encoder: 2.0e-5           # DNABERT-2 微调学习率
+  lr_head: 5.0e-4              # MIL + fusion + head 学习率
+  weight_decay: 1.0e-4         # L2 正则 (AdamW)
+  warmup_epochs: 5
+  gradient_clip: 1.0
+  patience: 15                 # early stopping
+  instance_budget: 128     # 每个 batch 的总位点数上限
+  max_batch_size: 32           # 每个 batch 的基因数上限
+  seed: 42
+
+experiment:
+  name: dnabert2_transmil_baseline
+  output_dir: experiments/

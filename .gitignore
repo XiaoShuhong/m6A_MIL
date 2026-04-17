@@ -1,0 +1,15 @@
+envs/
+data/processed/
+data/raw/
+experiments/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+venv/
+
+.venv/
+
+.DS_Store
