@@ -126,12 +126,13 @@ class M6AMIL(nn.Module):
         }
      
     def get_parameter_groups(self, lr_encoder: float, lr_head: float) -> list[dict]:
-        
-        encoder_params = list(self.site_encoder.parameters())
+
+        encoder_params = [p for p in self.site_encoder.parameters() if p.requires_grad]
         encoder_ids = set(id(p) for p in encoder_params)
- 
-        head_params = [p for p in self.parameters() if id(p) not in encoder_ids]
- 
+
+        head_params = [p for p in self.parameters() 
+                    if p.requires_grad and id(p) not in encoder_ids]
+
         return [
             {"params": encoder_params, "lr": lr_encoder},
             {"params": head_params, "lr": lr_head},
