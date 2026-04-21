@@ -198,7 +198,8 @@ def train_one_fold(fold: int, config: dict):
     # --- 5. 构建训练器 ---
     from torch.utils.tensorboard import SummaryWriter
     writer = SummaryWriter(log_dir=str(exp_dir / "logs"))
-    criterion = WeightedMSELoss()
+    # criterion = WeightedMSELoss(use_weights=False)
+    criterion = torch.nn.SmoothL1Loss(beta=0.5)
     trainer = Trainer(
         model=model,
         train_loader=train_loader,

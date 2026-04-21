@@ -96,7 +96,7 @@ class Trainer:
     
     def train(self):
         epochs = self.config.get("epochs", 50)
-        grad_clip = self.config.get("gradient_clip", 1.0)
+        grad_clip = self.config.get("gradient_clip", 2.0)
 
         for epoch in range(1, epochs + 1):
             self.current_epoch = epoch
@@ -186,9 +186,9 @@ class Trainer:
                 sample_weights = compute_sample_weights(batch["basemean"])
 
             loss = self.criterion(
-                output["predictions"],
+                output["predictions"].squeeze(-1),
                 batch["labels"],
-                sample_weights=sample_weights,
+                # sample_weights=sample_weights,
             )
 
             self.optimizer.zero_grad()
@@ -233,9 +233,9 @@ class Trainer:
             )
 
             loss = self.criterion(
-                output["predictions"],
+                output["predictions"].squeeze(-1),
                 batch["labels"],
-                sample_weights=None,
+                # sample_weights=None,
             )
  
             total_loss += loss.item()

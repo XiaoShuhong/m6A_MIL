@@ -33,7 +33,7 @@ model:
 training:
   epochs: 50
   lr_encoder: 5.0e-6          # DNABERT-2 微调学习率
-  lr_head: 1.0e-5              # MIL + fusion + head 学习率
+  lr_head:  5.0e-4              # MIL + fusion + head 学习率
   weight_decay: 1.0e-4         # L2 正则 (AdamW)
   warmup_epochs: 5
   gradient_clip: 1.0
@@ -43,5 +43,5 @@ training:
   seed: 42
 
 experiment:
-  name: dnabert2_transmil_baseline
+  name: dnabert2_transmil_baseline_3
   output_dir: experiments/
