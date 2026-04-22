@@ -11,10 +11,17 @@ data:
 model:
   # DNABERT-2 位点编码器
   site_encoder:
-    type: dnabert2
-    model_name: zhihan1996/DNABERT-2-117M
-    pooling: mean    
-    freeze_layers: 10    
+    # type: dnabert2
+    # model_name: zhihan1996/DNABERT-2-117M
+    # pooling: mean    
+    # freeze_layers: 10   
+    type: cnn              
+    seq_len: 501
+    conv_channels: [64, 128, 256]
+    kernel_sizes: [11, 7, 5]
+    pool_sizes: [4, 4, 1]
+    dropout: 0.2
+    output_dim: 256 
 
   scalar_dim: 13
   # 融合后的隐藏维度
@@ -31,17 +38,28 @@ model:
     dropout: 0.2
 
 training:
-  epochs: 50
-  lr_encoder: 5.0e-6          # DNABERT-2 微调学习率
-  lr_head:  5.0e-4              # MIL + fusion + head 学习率
-  weight_decay: 1.0e-4         # L2 正则 (AdamW)
-  warmup_epochs: 5
+  # epochs: 50
+  # lr_encoder: 5.0e-6          # DNABERT-2 微调学习率
+  # lr_head:  5.0e-4              # MIL + fusion + head 学习率
+  # weight_decay: 1.0e-4         # L2 正则 (AdamW)
+  # warmup_epochs: 5
+  # gradient_clip: 1.0
+  # patience: 15                 # early stopping
+  # instance_budget: 128     # 每个 batch 的总位点数上限
+  # max_batch_size: 64           # 每个 batch 的基因数上限
+  # seed: 42
+  epochs: 80                # CNN 收敛快, 但容量小, 多给点 epoch
+  lr_encoder: 1.0e-3        # CNN from-scratch, 用大 lr
+  lr_head: 1.0e-3           # head 跟 encoder 同 lr
+  weight_decay: 1.0e-4
+  warmup_epochs: 3          # CNN 不需要太长 warmup
   gradient_clip: 1.0
-  patience: 15                 # early stopping
-  instance_budget: 128     # 每个 batch 的总位点数上限
-  max_batch_size: 64           # 每个 batch 的基因数上限
+  patience: 15
+  instance_budget: 256      # CNN 快, 可以加大
+  max_batch_size: 64
   seed: 42
 
 experiment:
-  name: dnabert2_transmil_baseline_3
+  # name: dnabert2_transmil_baseline_3
+  name: cnn_transmil_baseline_1
   output_dir: experiments/

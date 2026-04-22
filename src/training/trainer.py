@@ -1,19 +1,19 @@
 from __future__ import annotations
- 
+
 import json
 import logging
 import time
 from pathlib import Path
- 
+
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
- 
+
 from src.training.losses import WeightedMSELoss, compute_sample_weights
 from src.training.metrics import compute_metrics
- 
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +28,6 @@ class Trainer:
         device: torch.device,
         exp_dir: Path,
         writer=None,
-
     ):
         self.model = model
         self.train_loader = train_loader
@@ -37,7 +36,7 @@ class Trainer:
         self.config = config
         self.device = device
         self.exp_dir = exp_dir
-        self.writer = writer 
+        self.writer = writer
 
         self.optimizer = self._build_optimizer()
         self.scheduler = self._build_scheduler()
@@ -58,7 +57,7 @@ class Trainer:
 
         param_groups = self.model.get_parameter_groups(lr_encoder, lr_head)
         optimizer = AdamW(param_groups, weight_decay=weight_decay)
- 
+
         n_encoder = sum(p.numel() for p in param_groups[0]["params"])
         n_head = sum(p.numel() for p in param_groups[1]["params"])
         logger.info(
@@ -66,12 +65,11 @@ class Trainer:
             lr_encoder, n_encoder, lr_head, n_head, weight_decay,
         )
         return optimizer
-    
+
     def _build_scheduler(self):
-        """Cosine annealing with linear warmup."""
         epochs = self.config.get("epochs", 50)
         warmup_epochs = self.config.get("warmup_epochs", 5)
- 
+
         warmup = LinearLR(
             self.optimizer,
             start_factor=0.1,
@@ -93,7 +91,25 @@ class Trainer:
             warmup_epochs, epochs - warmup_epochs,
         )
         return scheduler
-    
+
+    def _model_forward(self, batch: dict) -> dict:
+        """根据 batch 内容自动适配 DNABERT-2 / CNN 两种 encoder."""
+        if "input_ids" in batch:
+            return self.model(
+                input_ids=batch["input_ids"],
+                token_attn_mask=batch["token_attn_mask"],
+                scalars=batch["scalars"],
+                site_mask=batch["site_mask"],
+            )
+        elif "sequences" in batch:
+            return self.model(
+                sequences=batch["sequences"],
+                scalars=batch["scalars"],
+                site_mask=batch["site_mask"],
+            )
+        else:
+            raise KeyError("batch 中既无 input_ids 也无 sequences")
+
     def train(self):
         epochs = self.config.get("epochs", 50)
         grad_clip = self.config.get("gradient_clip", 2.0)
@@ -110,7 +126,7 @@ class Trainer:
 
             self.train_history.append(train_loss)
             self.val_history.append(val_loss)
- 
+
             elapsed = time.time() - epoch_start
 
             logger.info(
@@ -123,7 +139,7 @@ class Trainer:
                 val_metrics.get("direction_acc", 0),
                 current_lr, elapsed,
             )
-            # --- TensorBoard ---
+
             if self.writer is not None:
                 self.writer.add_scalars("loss", {
                     "train": train_loss,
@@ -133,26 +149,20 @@ class Trainer:
                     self.writer.add_scalar(f"val/{k}", v, epoch)
                 self.writer.add_scalar("lr/encoder", self.optimizer.param_groups[0]["lr"], epoch)
                 self.writer.add_scalar("lr/head", self.optimizer.param_groups[1]["lr"], epoch)
-        
-            # --- Checkpoint ---
+
             self._save_checkpoint("last.pt")
- 
+
             if val_loss < self.best_val_loss:
                 improvement = self.best_val_loss - val_loss
                 self.best_val_loss = val_loss
                 self.best_val_metrics = val_metrics
                 self.patience_counter = 0
                 self._save_checkpoint("best.pt")
-                logger.info(
-                    "  ↑ New best (val_loss improved by %.4f)", improvement,
-                )
+                logger.info("  ↑ New best (val_loss improved by %.4f)", improvement)
             else:
                 self.patience_counter += 1
-                logger.info(
-                    "  patience: %d/%d", self.patience_counter, self.patience,
-                )
- 
-            # --- Early stopping ---
+                logger.info("  patience: %d/%d", self.patience_counter, self.patience)
+
             if self.patience_counter >= self.patience:
                 logger.info("Early stopping triggered at epoch %d", epoch)
                 break
@@ -165,7 +175,6 @@ class Trainer:
             if self.train_history else 0,
         )
         logger.info("Best val metrics: %s", self.best_val_metrics)
- 
 
     def _train_one_epoch(self, grad_clip: float) -> float:
         self.model.train()
@@ -174,21 +183,11 @@ class Trainer:
         log_interval = 20
         for step, batch in enumerate(self.train_loader):
             batch = self._to_device(batch)
-            output = self.model(
-                input_ids=batch["input_ids"],
-                token_attn_mask=batch["token_attn_mask"],
-                scalars=batch["scalars"],
-                site_mask=batch["site_mask"],
-            )
-
-            sample_weights = None
-            if "basemean" in batch:
-                sample_weights = compute_sample_weights(batch["basemean"])
+            output = self._model_forward(batch)
 
             loss = self.criterion(
                 output["predictions"].squeeze(-1),
                 batch["labels"],
-                # sample_weights=sample_weights,
             )
 
             self.optimizer.zero_grad()
@@ -199,7 +198,7 @@ class Trainer:
                     self.model.parameters(), max_norm=grad_clip,
                 )
             self.optimizer.step()
- 
+
             total_loss += loss.item()
             n_batches += 1
             if (step + 1) % log_interval == 0:
@@ -207,15 +206,13 @@ class Trainer:
                 logger.info(
                     "  [batch %d/%d]  loss=%.4f  sites=%d",
                     step + 1, len(self.train_loader),
-                    avg_loss,
-                    sum(batch["n_sites"]),
+                    avg_loss, sum(batch["n_sites"]),
                 )
- 
+
         return total_loss / max(n_batches, 1)
-            
+
     @torch.no_grad()
     def _validate(self) -> tuple[float, dict]:
-        """验证, 返回 (平均 loss, metrics dict)."""
         self.model.eval()
         total_loss = 0.0
         n_batches = 0
@@ -224,34 +221,25 @@ class Trainer:
 
         for batch in self.val_loader:
             batch = self._to_device(batch)
- 
-            output = self.model(
-                input_ids=batch["input_ids"],
-                token_attn_mask=batch["token_attn_mask"],
-                scalars=batch["scalars"],
-                site_mask=batch["site_mask"],
-            )
+            output = self._model_forward(batch)
 
             loss = self.criterion(
                 output["predictions"].squeeze(-1),
                 batch["labels"],
-                # sample_weights=None,
             )
- 
+
             total_loss += loss.item()
             n_batches += 1
- 
+
             all_preds.append(output["predictions"].squeeze(-1).cpu().numpy())
             all_labels.append(batch["labels"].cpu().numpy())
- 
+
         avg_loss = total_loss / max(n_batches, 1)
- 
         preds = np.concatenate(all_preds)
         labels = np.concatenate(all_labels)
         metrics = compute_metrics(preds, labels)
- 
         return avg_loss, metrics
- 
+
     @torch.no_grad()
     def predict(self, dataloader) -> tuple[np.ndarray, np.ndarray, np.ndarray, list]:
         self.model.eval()
@@ -259,38 +247,29 @@ class Trainer:
         all_labels = []
         all_attn = []
         all_gene_ids = []
- 
+
         for batch in dataloader:
             batch = self._to_device(batch)
- 
-            output = self.model(
-                input_ids=batch["input_ids"],
-                token_attn_mask=batch["token_attn_mask"],
-                scalars=batch["scalars"],
-                site_mask=batch["site_mask"],
-            )
- 
+            output = self._model_forward(batch)
+
             preds = output["predictions"].squeeze(-1).cpu().numpy()
             labels = batch["labels"].cpu().numpy()
-            attn = output["attention"].cpu().numpy()        # (B, S)
-            n_sites = batch["n_sites"]                       # list[int]
- 
+            attn = output["attention"].cpu().numpy()
+            n_sites = batch["n_sites"]
+
             all_preds.append(preds)
             all_labels.append(labels)
             all_gene_ids.extend(batch["gene_ids"])
- 
-            # attention: 去掉 padding 部分, 只保留真实位点
+
             for i in range(len(n_sites)):
                 n = n_sites[i]
                 all_attn.append(attn[i, :n])
- 
+
         predictions = np.concatenate(all_preds)
         labels_arr = np.concatenate(all_labels)
- 
         return predictions, labels_arr, all_attn, all_gene_ids
-    
+
     def _to_device(self, batch: dict) -> dict:
-        """将 batch 中的 tensor 移动到 GPU."""
         result = {}
         for k, v in batch.items():
             if isinstance(v, torch.Tensor):
@@ -298,14 +277,12 @@ class Trainer:
             else:
                 result[k] = v
         return result
- 
+
     def _save_checkpoint(self, name: str):
-        """保存模型 checkpoint."""
         ckpt_path = self.exp_dir / "checkpoints" / name
         torch.save(self.model.state_dict(), ckpt_path)
- 
+
     def _save_history(self):
-        """保存训练历史."""
         history = {
             "train_loss": self.train_history,
             "val_loss": self.val_history,
@@ -318,4 +295,3 @@ class Trainer:
         history_path = self.exp_dir / "results" / "training_history.json"
         with open(history_path, "w") as f:
             json.dump(history, f, indent=2)
- 

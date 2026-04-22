@@ -10,6 +10,8 @@ class SequenceEncoder:
         seq_len: int = 501,
         max_tokens: int = 256,
     ):
+        if method == "cnn":
+            method = "onehot"
         self.method = method
         self.seq_len = seq_len
         self.max_tokens = max_tokens
